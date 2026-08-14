@@ -151,7 +151,22 @@ vim.o.splitbelow = true
 --   and `:help lua-options-guide`
 vim.o.list = true
 vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
+-- == CONFIGURACIÓN DE INDENTACIÓN ==
 
+-- Usa espacios en lugar de tabs reales (crucial para Flutter/JS)
+vim.opt.expandtab = true
+
+-- El ancho de la indentación (2 espacios es el estándar de Flutter)
+vim.opt.shiftwidth = 2
+
+-- El ancho visual de un Tab
+vim.opt.tabstop = 2
+
+-- Hace que al borrar con Backspace se sienta natural (borra 2 espacios)
+vim.opt.softtabstop = 2
+
+-- Mantiene la indentación de la línea anterior automáticamente
+vim.opt.smartindent = true
 -- Preview substitutions live, as you type!
 vim.o.inccommand = 'split'
 
@@ -198,6 +213,65 @@ vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left wind
 vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+
+-- Antigravity CLI integration (Floating Window Toggle)
+_G.agy_state = _G.agy_state or { win = nil, buf = nil }
+
+vim.keymap.set('n', '<leader>ag', function()
+  if _G.agy_state.win and vim.api.nvim_win_is_valid(_G.agy_state.win) then
+    vim.api.nvim_win_close(_G.agy_state.win, true)
+    _G.agy_state.win = nil
+    return
+  end
+
+  local width = math.floor(vim.o.columns * 0.8)
+  local height = math.floor(vim.o.lines * 0.8)
+  local col = math.floor((vim.o.columns - width) / 2)
+  local row = math.floor((vim.o.lines - height) / 2)
+
+  if not _G.agy_state.buf or not vim.api.nvim_buf_is_valid(_G.agy_state.buf) then
+    _G.agy_state.buf = vim.api.nvim_create_buf(false, true)
+  end
+
+  _G.agy_state.win = vim.api.nvim_open_win(_G.agy_state.buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    col = col,
+    row = row,
+    style = "minimal",
+    border = "rounded",
+    title = " Antigravity CLI ",
+    title_pos = "center"
+  })
+
+  -- Fix background color by linking NormalFloat to Normal
+  vim.api.nvim_set_option_value('winhl', 'NormalFloat:Normal', { win = _G.agy_state.win })
+
+  if vim.bo[_G.agy_state.buf].buftype ~= "terminal" then
+    vim.fn.termopen("agy")
+    
+    -- Close window automatically when terminal exits
+    vim.api.nvim_create_autocmd("TermClose", {
+      buffer = _G.agy_state.buf,
+      once = true,
+      callback = function()
+        vim.schedule(function()
+          if _G.agy_state.win and vim.api.nvim_win_is_valid(_G.agy_state.win) then 
+            vim.api.nvim_win_close(_G.agy_state.win, true) 
+            _G.agy_state.win = nil
+          end
+          if _G.agy_state.buf and vim.api.nvim_buf_is_valid(_G.agy_state.buf) then 
+            vim.api.nvim_buf_delete(_G.agy_state.buf, { force = true }) 
+            _G.agy_state.buf = nil
+          end
+        end)
+      end,
+    })
+  end
+
+  vim.cmd("startinsert")
+end, { desc = 'Toggle Antigravity CLI' })
 
 -- NOTE: Some terminals have colliding keymaps or are not able to send distinct keycodes
 -- vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
@@ -684,6 +758,7 @@ require('lazy').setup({
         -- ts_ls = {},
         --
 
+        jdtls = {},
         lua_ls = {
           -- cmd = { ... },
           -- filetypes = { ... },
@@ -836,7 +911,7 @@ require('lazy').setup({
         --
         -- See :h blink-cmp-config-keymap for defining your own keymap
         preset = 'default',
-
+        ['<Tab>'] = { 'accept', 'fallback' },
         -- For more advanced Luasnip keymaps (e.g. selecting choice nodes, expansion) see:
         --    https://github.com/L3MON4D3/LuaSnip?tab=readme-ov-file#keymaps
       },
@@ -876,28 +951,18 @@ require('lazy').setup({
     },
   },
 
-  { -- You can easily change to a different colorscheme.
-    -- Change the name of the colorscheme plugin below, and then
-    -- change the command in the config to whatever the name of that colorscheme is.
-    --
-    -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
+  { -- Tema por defecto
     'folke/tokyonight.nvim',
-    priority = 1000, -- Make sure to load this before all the other start plugins.
+    enabled = false, -- Desactivamos tokyonight para que no moleste
+    priority = 1000,
     config = function()
-      ---@diagnostic disable-next-line: missing-fields
-      require('tokyonight').setup {
-        styles = {
-          comments = { italic = false }, -- Disable italics in comments
-        },
-      }
+      -- Si querés el clásico de toda la vida:
+      vim.cmd.colorscheme 'vim'
 
-      -- Load the colorscheme here.
-      -- Like many other themes, this one has different styles, and you could load
-      -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'tokyonight-night'
+      -- O SI PREFERÍS el tema oscuro moderno de Neovim (probablemente este es el que buscás):
+      -- vim.cmd.colorscheme('default')
     end,
   },
-
   -- Highlight todo, notes, etc in comments
   { 'folke/todo-comments.nvim', event = 'VimEnter', dependencies = { 'nvim-lua/plenary.nvim' }, opts = { signs = false } },
 
@@ -940,28 +1005,29 @@ require('lazy').setup({
   },
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
+    branch = 'master',
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs', -- Sets main module to use for opts
-    -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-    opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
-      -- Autoinstall languages that are not installed
-      auto_install = true,
-      highlight = {
-        enable = true,
-        -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
-        --  If you are experiencing weird indenting issues, add the language to
-        --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby' },
-      },
-      indent = { enable = true, disable = { 'ruby' } },
-    },
-    -- There are additional nvim-treesitter modules that you can use to interact
-    -- with nvim-treesitter. You should go explore a few and see what interests you:
-    --
-    --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
-    --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
-    --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
+    lazy = false, -- Forzamos a que cargue para asegurar que se instale
+    config = function()
+      -- INTENTO SEGURO (Try-Catch):
+      -- Si treesitter no está instalado, esto evita que Neovim explote
+      local status_ok, configs = pcall(require, 'nvim-treesitter.configs')
+      if not status_ok then
+        vim.notify('Treesitter aun no esta listo. Ejecuta :TSUpdate', vim.log.levels.WARN)
+        return
+      end
+
+      configs.setup {
+        -- He agregado 'dart' a la lista para ti
+        ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'vim', 'dart', 'java' },
+        auto_install = true,
+        highlight = {
+          enable = true,
+          additional_vim_regex_highlighting = { 'ruby' },
+        },
+        indent = { enable = true, disable = { 'ruby' } },
+      }
+    end,
   },
 
   -- The following comments only work if you have downloaded the kickstart repo, not just copy pasted the
@@ -984,7 +1050,7 @@ require('lazy').setup({
   --    This is the easiest way to modularize your config.
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
-  -- { import = 'custom.plugins' },
+  { import = 'custom.plugins' },
   --
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
   -- Or use telescope!
@@ -1011,6 +1077,85 @@ require('lazy').setup({
     },
   },
 })
+-- Crea un autocomando que se ejecuta solo cuando un cliente LSP se adjunta al buffer
+vim.api.nvim_create_autocmd('LspAttach', {
+  group = vim.api.nvim_create_augroup('UserLspConfig', { clear = true }),
+  callback = function(ev)
+    -- Función helper para mapear teclas fácilmente en este buffer
+    local opts = { buffer = ev.buf, desc = '' }
+
+    -- Mapeo de GD (Go to Definition)
+    opts.desc = 'Ir a la definición (LSP)'
+    vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+
+    -- OTROS MAPEOS ÚTILES QUE DEBERÍAS TENER:
+
+    -- Hover (ver documentación flotante sobre el símbolo) - Usualmente es K
+    opts.desc = 'Ver documentación (Hover)'
+    vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
+
+    -- Ir a referencias (lugares donde se usa la variable)
+    opts.desc = 'Ver referencias'
+    vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
+  end,
+})
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+---- ==========================================
+--  FIX VISUAL: FONDO TRANSPARENTE
+-- ==========================================
+-- Esto elimina el color de fondo de Neovim para que se funda con tu terminal
+-- y no se note ese "padding" molesto.
+
+vim.api.nvim_create_autocmd('ColorScheme', {
+  pattern = '*',
+  callback = function()
+    -- Lista de elementos a los que quitarles el fondo
+    local highlights = {
+      'Normal', -- Texto normal
+      'NormalNC', -- Ventanas no activas
+      'LineNr', -- Números de línea
+      'Folded', -- Código plegado
+      'NonText', -- Caracteres ocultos
+      'SignColumn', -- Columna de signos (izquierda)
+      'NeoTreeNormal', -- Fondo del explorador de archivos (si usas NeoTree)
+      'NeoTreeNormalNC',
+    }
+
+    for _, name in ipairs(highlights) do
+      vim.api.nvim_set_hl(0, name, { bg = 'none' })
+    end
+  end,
+})
+
+-- Forzar la recarga del esquema de colores actual para aplicar el cambio ya mismo
+vim.cmd.colorscheme(vim.g.colors_name or 'default')
+-- FORZAR VISIBILIDAD DE INLAY HINTS
+-- 1. Desvincula el grupo para que no herede de "NonText"
+vim.api.nvim_set_hl(0, 'LspInlayHint', { link = 'Comment' })
+
+-- 2. Autocomando para activar los hints automáticamente al abrir Rust
+vim.api.nvim_create_autocmd('LspAttach', {
+  group = vim.api.nvim_create_augroup('UserLspConfig', {}),
+  callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if client.server_capabilities.inlayHintProvider then
+      vim.lsp.inlay_hint.enable(true, { bufnr = args.buf })
+    end
+  end,
+})-- Saltar al siguiente punto con Control + L (como moverte a la derecha en Vim)
+vim.keymap.set({"i", "s"}, "<C-L>", function() 
+  local ls = require("luasnip")
+  if ls.expand_or_jumpable() then
+    ls.expand_or_jump()
+  end
+end, { silent = true })
+
+-- Volver atrás con Control + H
+vim.keymap.set({"i", "s"}, "<C-H>", function() 
+  local ls = require("luasnip")
+  if ls.jumpable(-1) then
+    ls.jump(-1)
+  end
+end, { silent = true })

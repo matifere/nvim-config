@@ -1,0 +1,23 @@
+return {
+  'nvim-treesitter/nvim-treesitter',
+  build = ':TSUpdate', -- Esto asegura que se compilen los parsers al instalar
+  opts = {
+    ensure_installed = {
+      'typescript',
+      'javascript',
+      'json',
+      'html',
+      'css',
+      'lua', -- Necesario para configurar neovim
+      'vim',
+      'vimdoc',
+    },
+    highlight = { enable = true },
+    indent = { enable = true },
+    -- Opcional: autotag para cerrar etiquetas HTML/JSX automáticamente
+    autotag = { enable = true },
+  },
+  config = function(_, opts)
+    require('nvim-treesitter.configs').setup(opts)
+  end,
+}
