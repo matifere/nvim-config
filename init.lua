@@ -747,7 +747,7 @@ require('lazy').setup({
       local servers = {
         -- clangd = {},
         -- gopls = {},
-        -- pyright = {},
+        pyright = {},
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -791,6 +791,8 @@ require('lazy').setup({
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
+        'black',  -- Auto-formateador para Python
+        'isort',  -- Ordenador de imports para Python
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -844,7 +846,7 @@ require('lazy').setup({
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
+        python = { "isort", "black" },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
@@ -1159,3 +1161,43 @@ vim.keymap.set({"i", "s"}, "<C-H>", function()
     ls.jump(-1)
   end
 end, { silent = true })
+  
+-- ==========================================
+--  PYTHON RUNNER
+-- ==========================================
+_G.python_runner_buf = nil
+
+vim.keymap.set('n', '<leader>r', function()
+  if vim.bo.filetype == 'python' then
+    vim.cmd('w')
+    
+    local file_to_run = vim.fn.expand('%')
+    
+    -- Si ya hay una terminal corriendo de un intento anterior, márala y ciérrala
+    if _G.python_runner_buf and vim.api.nvim_buf_is_valid(_G.python_runner_buf) then
+      vim.api.nvim_buf_delete(_G.python_runner_buf, { force = true })
+    end
+
+    -- Abre un panel pequeño abajo para la terminal
+    vim.cmd('botright 12split | enew')
+    _G.python_runner_buf = vim.api.nvim_get_current_buf()
+    
+    -- Evita que este buffer se guarde en tu lista normal de buffers
+    vim.bo[_G.python_runner_buf].buflisted = false
+
+    vim.fn.termopen('python3 "' .. file_to_run .. '"', {
+      on_exit = function(_, code, _)
+        -- Si termina sin errores (por ejemplo cerraste la ventana), cierra el panel
+        if code == 0 then
+          if _G.python_runner_buf and vim.api.nvim_buf_is_valid(_G.python_runner_buf) then
+            vim.api.nvim_buf_delete(_G.python_runner_buf, { force = true })
+          end
+        end
+      end
+    })
+    
+    vim.cmd('wincmd p') -- Devuelve el foco al editor
+  else
+    print('Not a python file')
+  end
+end, { desc = '[R]un Python file in terminal split' })

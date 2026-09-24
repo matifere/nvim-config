@@ -22,7 +22,7 @@ return {
       }
 
       -- Esta línea es la que ACTIVA el tema al iniciar
-      vim.cmd.colorscheme 'retrobox'
+      vim.cmd.colorscheme 'unokai'
     end,
   },
 }
